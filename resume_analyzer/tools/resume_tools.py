@@ -1,0 +1,172 @@
+import os
+import json
+from datetime import datetime
+
+# ── Tool 1: Extract text from a PDF ──────────────────────────────────────────
+def extract_pdf_text(filepath: str) -> str:
+    """
+    Reads a PDF resume file and returns its raw text content.
+
+    Args:
+        filepath: The path to the PDF file on disk.
+
+    Returns:
+        A string containing all the text extracted from the PDF,
+        or an error message if the file could not be read.
+    """
+    try:
+        import PyPDF2
+        if not os.path.exists(filepath):
+            return f"Error: File not found at path '{filepath}'"
+        with open(filepath, "rb") as f:
+            reader = PyPDF2.PdfReader(f)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() or ""
+        if not text.strip():
+            return "Error: Could not extract any text from the PDF. It may be scanned/image-based."
+        return text
+    except Exception as e:
+        return f"Error reading PDF: {str(e)}"
+
+
+# ── Tool 2: Extract text from a plain .txt file ───────────────────────────────
+def extract_text_from_file(filepath: str) -> str:
+    """
+    Reads a plain text (.txt) file and returns its content.
+
+    Args:
+        filepath: The path to the text file.
+
+    Returns:
+        The file contents as a string, or an error message.
+    """
+    try:
+        if not os.path.exists(filepath):
+            return f"Error: File not found at path '{filepath}'"
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+
+
+# ── Tool 3: Calculate keyword match score ────────────────────────────────────
+def calculate_keyword_match_score(
+    resume_text: str, job_description_text: str
+) -> str:
+    """
+    Compares keywords found in a resume against a job description and
+    calculates a match percentage score.
+
+    Args:
+        resume_text: The full text content of the resume.
+        job_description_text: The full text of the job description.
+
+    Returns:
+        A JSON string with keys: match_score (int, 0-100),
+        matched_keywords (list), missing_keywords (list).
+    """
+    # Simple keyword extraction: lowercase words, remove noise
+    def extract_keywords(text: str) -> set:
+        import re
+        words = re.findall(r'\b[a-zA-Z][a-zA-Z+#.]{2,}\b', text.lower())
+        stopwords = {
+            "the","and","for","are","with","that","this","have","from",
+            "will","your","been","has","but","not","you","all","can",
+            "her","his","they","their","what","were","said","each",
+            "which","she","how","its","about","than","then","them",
+            "these","some","into","our","more","also","must","any",
+        }
+        return {w for w in words if w not in stopwords and len(w) > 3}
+
+    resume_kw = extract_keywords(resume_text)
+    jd_kw = extract_keywords(job_description_text)
+
+    matched = sorted(resume_kw & jd_kw)
+    missing = sorted(jd_kw - resume_kw)
+
+    score = int((len(matched) / max(len(jd_kw), 1)) * 100)
+
+    result = {
+        "match_score": min(score, 100),
+        "matched_keywords": matched[:30],   # top 30 to keep output clean
+        "missing_keywords": missing[:30],
+    }
+    return json.dumps(result, indent=2)
+
+
+# ── Tool 4: Generate a markdown report ───────────────────────────────────────
+def generate_markdown_report(
+    candidate_name: str,
+    job_title: str,
+    match_score: int,
+    matched_keywords: str,
+    missing_keywords: str,
+    strengths: str,
+    weaknesses: str,
+    recommendations: str,
+) -> str:
+    """
+    Generates a formatted Markdown report of the resume analysis and saves it
+    to a file named 'resume_analysis_report.md'.
+
+    Args:
+        candidate_name: Name of the candidate.
+        job_title: The job title being applied for.
+        match_score: Integer score 0-100 representing keyword match %.
+        matched_keywords: Comma-separated list of matched keywords.
+        missing_keywords: Comma-separated list of keywords missing from resume.
+        strengths: Paragraph describing resume strengths.
+        weaknesses: Paragraph describing resume weaknesses.
+        recommendations: Numbered list of specific improvement suggestions.
+
+    Returns:
+        A success message with the output filename.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    report = f"""# 📄 Smart Resume Analysis Report
+
+**Candidate:** {candidate_name}  
+**Target Role:** {job_title}  
+**Analysis Date:** {timestamp}  
+
+---
+
+## 🎯 Overall Match Score: {match_score}/100
+
+{'🟢 Strong Match' if match_score >= 70 else '🟡 Moderate Match' if match_score >= 40 else '🔴 Needs Improvement'}
+
+---
+
+## ✅ Matched Keywords
+{matched_keywords}
+
+---
+
+## ❌ Missing Keywords (Add These to Your Resume)
+{missing_keywords}
+
+---
+
+## 💪 Resume Strengths
+{strengths}
+
+---
+
+## ⚠️ Areas for Improvement
+{weaknesses}
+
+---
+
+## 🔧 Recommendations
+{recommendations}
+
+---
+
+*Report generated by Smart Resume Analyzer (Google ADK Multi-Agent System)*
+"""
+    output_path = "resume_analysis_report.md"
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(report)
+
+    return f"Report successfully saved to '{output_path}'"
