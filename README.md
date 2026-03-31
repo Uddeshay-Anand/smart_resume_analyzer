@@ -72,7 +72,7 @@ adk run resume_analyzer
 
 ### Step 1 — Verify your folder structure looks like this:
 ```
-smart_resume_analyzer/           ← you are here when running commands
+smart_resume_analyzer/
 ├── .env
 ├── .gitignore
 ├── requirements.txt
